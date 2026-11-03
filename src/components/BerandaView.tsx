@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { sounds } from '../utils/sound'
 import type { MissionItem } from '../data/missionsData'
+import gameScreenImg from '../assets/game-screen.png'
 
 interface BerandaViewProps {
   stars: number
@@ -67,7 +68,7 @@ export const BerandaView: React.FC<BerandaViewProps> = ({
     <div className="beranda-container">
       {/* Background Graphic matching the photo 100% */}
       <img
-        src="/game-screen.png"
+        src={gameScreenImg}
         alt="Petualangan Bangun Datar"
         className="beranda-art-base"
         draggable={false}

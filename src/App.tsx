@@ -37,6 +37,16 @@ function App() {
     return saved !== null ? parseInt(saved, 10) : 3
   })
 
+  const [coins, setCoins] = useState<number>(() => {
+    const saved = localStorage.getItem('game_coins')
+    return saved !== null ? parseInt(saved, 10) : 460
+  })
+
+  const [xp, setXp] = useState<number>(() => {
+    const saved = localStorage.getItem('game_xp')
+    return saved !== null ? parseInt(saved, 10) : 850
+  })
+
   const [playerName, setPlayerName] = useState<string>(() => {
     return localStorage.getItem('game_player_name') || 'Rizki'
   })
@@ -57,6 +67,7 @@ function App() {
   >(null)
   const [isPlayingQuiz, setIsPlayingQuiz] = useState<boolean>(false)
   const [quizLevel, setQuizLevel] = useState<number>(1)
+  const [petaFlowStep, setPetaFlowStep] = useState<'map' | 'detail' | 'exploration' | 'quiz' | 'result'>('map')
 
   // Sync state to LocalStorage
   useEffect(() => {
@@ -70,6 +81,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem('game_level', playerLevel.toString())
   }, [playerLevel])
+
+  useEffect(() => {
+    localStorage.setItem('game_coins', coins.toString())
+  }, [coins])
+
+  useEffect(() => {
+    localStorage.setItem('game_xp', xp.toString())
+  }, [xp])
 
   useEffect(() => {
     localStorage.setItem('game_player_name', playerName)
@@ -193,8 +212,27 @@ function App() {
             <PetaView
               stars={stars}
               gems={gems}
-              onStartLevel={(lvl) => handleStartGame(lvl)}
+              coins={coins}
+              xp={xp}
+              playerLevel={playerLevel}
+              playerName={playerName}
+              avatar={avatar}
+              activeMission={activeMission}
+              onUpdateRewards={(earnedStars, earnedCoins, earnedXp) => {
+                setStars((s) => s + earnedStars)
+                setCoins((c) => c + earnedCoins)
+                setXp((x) => x + earnedXp)
+                if (xp + earnedXp >= 1000 && playerLevel < 4) {
+                  setPlayerLevel(4)
+                }
+              }}
               onBackToHome={() => setActiveTab('Beranda')}
+              onOpenMissions={() => setActiveModal('missions')}
+              onOpenSettings={() => setActiveModal('settings')}
+              onOpenStarsShop={() => setActiveModal('starsShop')}
+              onOpenGemsShop={() => setActiveModal('gemsShop')}
+              onOpenProfile={() => setActiveTab('Profil')}
+              onFlowStepChange={(step) => setPetaFlowStep(step)}
             />
           )}
 
@@ -233,8 +271,16 @@ function App() {
         </main>
 
         {/* Global Bottom Navigation Dock */}
-        {!isPlayingQuiz && (
-          <BottomNav activeTab={activeTab} onSelectTab={(tab) => setActiveTab(tab)} />
+        {!isPlayingQuiz && (activeTab !== 'Peta' || petaFlowStep === 'map') && (
+          <BottomNav
+            activeTab={activeTab}
+            onSelectTab={(tab) => {
+              setActiveTab(tab)
+              if (tab === 'Peta') {
+                setPetaFlowStep('map')
+              }
+            }}
+          />
         )}
 
         {/* Fullscreen Interactive Quiz Overlay */}

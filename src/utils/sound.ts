@@ -121,6 +121,50 @@ class SoundManager {
     }
   }
 
+  // Jump sound
+  playJump() {
+    if (!this._soundEnabled) return
+    const ctx = this.initCtx()
+    if (!ctx) return
+    try {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(320, ctx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(640, ctx.currentTime + 0.12)
+      gain.gain.setValueAtTime(0.2, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.12)
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Crisp coin collection chime
+  playCoin() {
+    if (!this._soundEnabled) return
+    const ctx = this.initCtx()
+    if (!ctx) return
+    try {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(987.77, ctx.currentTime) // B5
+      osc.frequency.setValueAtTime(1318.51, ctx.currentTime + 0.06) // E6
+      gain.gain.setValueAtTime(0.25, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.18)
+    } catch {
+      // Ignore
+    }
+  }
+
   // Sparkling star/coin collect sound
   playStarCoin() {
     if (!this._soundEnabled) return
