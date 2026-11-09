@@ -4,7 +4,7 @@ import type { LevelDetailData } from '../../data/levelFlowData'
 
 interface ExplorationViewProps {
   levelData: LevelDetailData
-  onFinishExploration: (coinsEarned: number, shapesCollected: number) => void
+  onFinishExploration: (coinsEarned: number, shapesCollected: number, remainingLives: number) => void
   onExit: () => void
 }
 
@@ -32,6 +32,8 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [coinsCollected, setCoinsCollected] = useState(0)
   const [shapesCollected, setShapesCollected] = useState(0)
+  const [lives, setLives] = useState(levelData.initialLives || 3)
+  const [isGameOver, setIsGameOver] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [showCompleteBanner, setShowCompleteBanner] = useState(false)
 
@@ -56,20 +58,31 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
     { x: 300, y: 290, width: 100, height: 25 },   // Checkpoint Island (right with flag)
   ])
 
-  // Collectibles on the islands
-  const collectiblesRef = useRef<CollectibleItem[]>([
-    { id: 'c1', x: 50, y: 270, type: 'coin', icon: '🪙', collected: false },
-    { id: 'c2', x: 80, y: 270, type: 'coin', icon: '🪙', collected: false },
-    { id: 'c3', x: 160, y: 215, type: 'coin', icon: '🪙', collected: false },
-    { id: 'c4', x: 200, y: 215, type: 'coin', icon: '🪙', collected: false },
-    { id: 'c5', x: 280, y: 145, type: 'coin', icon: '🪙', collected: false },
-    // Shapes required
-    { id: 's1', x: 60, y: 195, type: 'segitiga', icon: '🔺', collected: false },
-    { id: 's2', x: 180, y: 175, type: 'persegi', icon: '🟦', collected: false },
-    { id: 's3', x: 270, y: 110, type: 'lingkaran', icon: '🔴', collected: false },
-    { id: 's4', x: 130, y: 95, type: 'segitiga', icon: '🔺', collected: false },
-    { id: 's5', x: 340, y: 235, type: 'persegi', icon: '🟦', collected: false },
-  ])
+  // Collectibles on the islands: 5 coins + target shapes matching levelData
+  const getInitialCollectibles = (): CollectibleItem[] => {
+    const shapePositions = [
+      { x: 180, y: 175 },
+      { x: 270, y: 110 },
+      { x: 130, y: 95 },
+    ]
+    return [
+      { id: 'c1', x: 50, y: 270, type: 'coin', icon: '🪙', collected: false },
+      { id: 'c2', x: 80, y: 270, type: 'coin', icon: '🪙', collected: false },
+      { id: 'c3', x: 160, y: 215, type: 'coin', icon: '🪙', collected: false },
+      { id: 'c4', x: 200, y: 215, type: 'coin', icon: '🪙', collected: false },
+      { id: 'c5', x: 280, y: 145, type: 'coin', icon: '🪙', collected: false },
+      ...levelData.targetShapes.map((t, idx) => ({
+        id: `s-${idx + 1}`,
+        x: shapePositions[idx]?.x || (100 + idx * 80),
+        y: shapePositions[idx]?.y || (160 - idx * 30),
+        type: 'segitiga' as const,
+        icon: t.icon,
+        collected: false,
+      })),
+    ]
+  }
+
+  const collectiblesRef = useRef<CollectibleItem[]>(getInitialCollectibles())
 
   // Key controls state
   const keysRef = useRef<{ left: boolean; right: boolean; jump: boolean }>({
@@ -126,14 +139,31 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
     keysRef.current[dir] = false
   }
 
+  // Reset game on Game Over retry
+  const handleRetryExploration = () => {
+    sounds.playClick()
+    setLives(levelData.initialLives || 3)
+    setIsGameOver(false)
+    setCoinsCollected(0)
+    setShapesCollected(0)
+    playerRef.current.x = 40
+    playerRef.current.y = 200
+    playerRef.current.vx = 0
+    playerRef.current.vy = 0
+    // Reset collectibles
+    collectiblesRef.current.forEach((item) => {
+      item.collected = false
+    })
+  }
+
   // Complete exploration and proceed
   const handleComplete = useCallback(() => {
     sounds.playSuccess()
     setShowCompleteBanner(true)
     setTimeout(() => {
-      onFinishExploration(coinsCollected || 12, shapesCollected || 5)
+      onFinishExploration(coinsCollected || 12, shapesCollected || 5, lives)
     }, 1200)
-  }, [coinsCollected, shapesCollected, onFinishExploration])
+  }, [coinsCollected, shapesCollected, lives, onFinishExploration])
 
   // Main 60FPS Game Loop
   useEffect(() => {
@@ -151,7 +181,7 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
     let currentShapes = shapesCollected
 
     const gameLoop = () => {
-      if (!isPaused && !showCompleteBanner) {
+      if (!isPaused && !showCompleteBanner && !isGameOver) {
         const p = playerRef.current
 
         // Horizontal input
@@ -198,12 +228,19 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
           }
         })
 
-        // Pit fall protection (bounce back softly to first platform)
+        // Pit fall protection & life deduction (Heart loss)
         if (p.y > canvas.height + 20) {
           p.x = 40
           p.y = 200
           p.vy = 0
           sounds.playWrong()
+          setLives((prevLives) => {
+            const nextLives = Math.max(0, prevLives - 1)
+            if (nextLives === 0) {
+              setIsGameOver(true)
+            }
+            return nextLives
+          })
         }
 
         // Collectibles collision
@@ -347,11 +384,11 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
 
     animationId = requestAnimationFrame(gameLoop)
     return () => cancelAnimationFrame(animationId)
-  }, [isPaused, showCompleteBanner, levelData.totalTargetShapes, coinsCollected, shapesCollected, handleComplete])
+  }, [isPaused, showCompleteBanner, isGameOver, levelData.totalTargetShapes, coinsCollected, shapesCollected, handleComplete])
 
   return (
     <div className="level-flow-screen exploration-screen">
-      {/* Top Header Bar matching Screen 3 */}
+      {/* Top Header Bar matching Screen 3 with Lives Indicator */}
       <header className="flow-top-bar explore-bar">
         <button
           type="button"
@@ -371,11 +408,16 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
           <span className="coin-number">{coinsCollected}</span>
         </div>
 
-        {/* Right Stars */}
-        <div className="flow-header-stars-display">
-          <span className="star-lit">★</span>
-          <span className="star-lit">★</span>
-          <span className="star-lit">★</span>
+        {/* Lives (Hati / Nyawa) Indicator: 3 Hearts */}
+        <div className="flow-header-lives-display" title={`Sisa Nyawa: ${lives}/3`}>
+          {[1, 2, 3].map((heartIndex) => (
+            <span
+              key={heartIndex}
+              className={`heart-icon ${heartIndex <= lives ? 'heart-full' : 'heart-empty'}`}
+            >
+              {heartIndex <= lives ? '❤️' : '🤍'}
+            </span>
+          ))}
         </div>
       </header>
 
@@ -414,6 +456,33 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
           </div>
         )}
 
+        {/* Game Over (Nyawa Habis) Overlay */}
+        {isGameOver && (
+          <div className="explore-gameover-overlay">
+            <div className="gameover-dialog-card">
+              <span className="gameover-broken-heart">💔</span>
+              <h3>Nyawa Habis!</h3>
+              <p>Kamu terjatuh ke awan. Jangan berkecil hati, ayo bangkit dan kumpulkan bentuknya lagi!</p>
+              <div className="gameover-actions-column">
+                <button
+                  type="button"
+                  className="gameover-retry-btn"
+                  onClick={handleRetryExploration}
+                >
+                  🔄 Ulangi (Isi 3 Nyawa)
+                </button>
+                <button
+                  type="button"
+                  className="gameover-exit-btn"
+                  onClick={onExit}
+                >
+                  ✕ Kembali ke Peta
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Pause Modal */}
         {isPaused && (
           <div className="explore-pause-overlay">
@@ -429,7 +498,7 @@ export const ExplorationView: React.FC<ExplorationViewProps> = ({
               <button
                 type="button"
                 className="pause-action-btn secondary"
-                onClick={() => onFinishExploration(coinsCollected || 12, 5)}
+                onClick={() => onFinishExploration(coinsCollected || 12, 5, lives)}
               >
                 ⏩ Lewati ke Soal
               </button>

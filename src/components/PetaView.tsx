@@ -8,7 +8,7 @@ import { LevelDetailView } from './levelFlow/LevelDetailView'
 import { ExplorationView } from './levelFlow/ExplorationView'
 import { LevelQuizView } from './levelFlow/LevelQuizView'
 import { LevelResultView } from './levelFlow/LevelResultView'
-import { level1Data, type LevelDetailData } from '../data/levelFlowData'
+import { level1Data, getLevelData, islandThemeNames, type LevelDetailData } from '../data/levelFlowData'
 import mapScreenImg from '../assets/map-screen.jpg'
 
 interface PetaViewProps {
@@ -28,6 +28,76 @@ interface PetaViewProps {
   onOpenGemsShop: () => void
   onOpenProfile: () => void
   onFlowStepChange?: (step: 'map' | 'detail' | 'exploration' | 'quiz' | 'result') => void
+}
+
+interface MapIslandNodeConfig {
+  lvl: number
+  islandNumber: number
+  top: string
+  left: string
+  title: string
+}
+
+// Exactly 3 levels per island, ordered sequentially from 1 to 15!
+const mapIslandsLevels: MapIslandNodeConfig[] = [
+  // Pulau 1: Pulau Bentuk (Levels 1, 2, 3)
+  { lvl: 1, islandNumber: 1, top: '26.7%', left: '15.7%', title: 'Gerbang Pulau Bentuk' },
+  { lvl: 2, islandNumber: 1, top: '26.7%', left: '27.6%', title: 'Lembah Bentuk' },
+  { lvl: 3, islandNumber: 1, top: '26.7%', left: '39.5%', title: 'Hutan Bentuk' },
+
+  // Pulau 2: Hutan Segi Empat (Levels 4, 5, 6)
+  { lvl: 4, islandNumber: 2, top: '36.3%', left: '64.5%', title: 'Sisi & Sudut Segi Empat' },
+  { lvl: 5, islandNumber: 2, top: '35.7%', left: '76.5%', title: 'Macam-macam Segi Empat' },
+  { lvl: 6, islandNumber: 2, top: '36.1%', left: '88.4%', title: 'Keliling Segi Empat' },
+
+  // Pulau 3: Pegunungan Segitiga (Levels 7, 8, 9)
+  { lvl: 7, islandNumber: 3, top: '54.3%', left: '18.4%', title: 'Segitiga Sama Sisi & Kaki' },
+  { lvl: 8, islandNumber: 3, top: '54.0%', left: '30.2%', title: 'Segitiga Siku-siku' },
+  { lvl: 9, islandNumber: 3, top: '53.7%', left: '40.9%', title: 'Keliling Segi Empat' },
+
+  // Pulau 4: Danau Lingkaran (Levels 10, 11, 12)
+  { lvl: 10, islandNumber: 4, top: '61.2%', left: '68.8%', title: 'Jari-jari Lingkaran' },
+  { lvl: 11, islandNumber: 4, top: '61.2%', left: '77.3%', title: 'Diameter Lingkaran' },
+  { lvl: 12, islandNumber: 4, top: '61.6%', left: '88.3%', title: 'Keliling & Luas Lingkaran' },
+
+  // Pulau 5: Kastil Geometri (Levels 13, 14, 15)
+  { lvl: 13, islandNumber: 5, top: '80.0%', left: '39.3%', title: 'Gabungan Bentuk Datar' },
+  { lvl: 14, islandNumber: 5, top: '80.5%', left: '50.1%', title: 'Luas Gabungan Bentuk' },
+  { lvl: 15, islandNumber: 5, top: '80.5%', left: '60.2%', title: 'Ujian Geometri Pamungkas' },
+]
+
+const STORAGE_KEY = 'game_level_progress_v4'
+
+const getInitialLevelProgress = (): Record<number, { completed: boolean; stars: number; unlocked: boolean }> => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed && typeof parsed === 'object' && parsed[1]?.unlocked) {
+        return parsed
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse saved level progress', e)
+  }
+  // Only Level 1 starts unlocked; Levels 2 to 15 are strictly locked until previous level is completed!
+  return {
+    1: { completed: false, stars: 0, unlocked: true },
+    2: { completed: false, stars: 0, unlocked: false },
+    3: { completed: false, stars: 0, unlocked: false },
+    4: { completed: false, stars: 0, unlocked: false },
+    5: { completed: false, stars: 0, unlocked: false },
+    6: { completed: false, stars: 0, unlocked: false },
+    7: { completed: false, stars: 0, unlocked: false },
+    8: { completed: false, stars: 0, unlocked: false },
+    9: { completed: false, stars: 0, unlocked: false },
+    10: { completed: false, stars: 0, unlocked: false },
+    11: { completed: false, stars: 0, unlocked: false },
+    12: { completed: false, stars: 0, unlocked: false },
+    13: { completed: false, stars: 0, unlocked: false },
+    14: { completed: false, stars: 0, unlocked: false },
+    15: { completed: false, stars: 0, unlocked: false },
+  }
 }
 
 export const PetaView: React.FC<PetaViewProps> = ({
@@ -55,11 +125,17 @@ export const PetaView: React.FC<PetaViewProps> = ({
   // 5. 'result' -> Hasil Level
   const [flowStep, setFlowStep] = useState<'map' | 'detail' | 'exploration' | 'quiz' | 'result'>('map')
 
-  // Level flow state
+  // Level flow state & 3 lives system
   const [activeLevelData, setActiveLevelData] = useState<LevelDetailData>(level1Data)
+  const [currentLives, setCurrentLives] = useState<number>(3)
   const [coinsEarnedInExploration, setCoinsEarnedInExploration] = useState(12)
   const [finalScore, setFinalScore] = useState(460)
   const [quizCorrectCount, setQuizCorrectCount] = useState(5)
+
+  // Level Progression: 5 islands x 3 levels = 15 levels total
+  // Only Level 1 starts unlocked; succeeding levels unlock one-by-one as previous is completed
+  const [levelProgress, setLevelProgress] = useState<Record<number, { completed: boolean; stars: number; unlocked: boolean }>>(getInitialLevelProgress)
+  const [shakingNodeId, setShakingNodeId] = useState<number | null>(null)
 
   // Map easter-eggs and dialogs
   const [bubbleText, setBubbleText] = useState<string | null>(null)
@@ -79,10 +155,10 @@ export const PetaView: React.FC<PetaViewProps> = ({
     sounds.playBoing()
     setHeroBouncing(true)
     const messages = [
-      'Halo! Kita ada di Pulau Bentuk! Ayo lanjut taklukkan Level 1 & 2!',
-      'Lihat ke seberang awan, ada Hutan Segi Empat dan Danau Lingkaran!',
-      'Kumpulkan semua bentuk di tahap Eksplorasi untuk bonus poin!',
-      'Segitiga punya 3 sisi kokoh, siap menemanimu menjelajahi peta ini!'
+      'Halo! Kita ada di Pulau Bentuk! Selesaikan level satu per satu untuk membuka pulau selanjutnya!',
+      'Hati-hati saat menjelajah! Jangan sampai jatuh agar 3 nyawamu utuh!',
+      'Di akhir level, sisa nyawamu menentukan berapa bintang emas ⭐ yang kamu peroleh!',
+      'Segitiga siap menemanimu menaklukkan 15 level di 5 pulau geometri!'
     ]
     const randomMsg = messages[Math.floor(Math.random() * messages.length)]
     setBubbleText(randomMsg)
@@ -92,19 +168,19 @@ export const PetaView: React.FC<PetaViewProps> = ({
 
   // Launch the 4-step level flow when a level node is clicked
   const handleLevelClick = (lvlNum: number) => {
-    sounds.playClick()
-    // Configure level data (custom or default Level 1)
-    if (lvlNum === 1) {
-      setActiveLevelData(level1Data)
-    } else {
-      setActiveLevelData({
-        ...level1Data,
-        levelNumber: lvlNum,
-        levelTitle: lvlNum <= 3 ? 'Pulau Bentuk' : lvlNum <= 12 ? 'Hutan Segi Empat' : 'Pegunungan Geometri',
-        objective: 'Mengenali bangun datar, sisi, sudut, serta kelilingnya.',
-      })
+    const info = levelProgress[lvlNum]
+    if (!info || !info.unlocked) {
+      sounds.playWrong()
+      setShakingNodeId(lvlNum)
+      setTimeout(() => setShakingNodeId(null), 500)
+      setBubbleText(`🔒 Level ${lvlNum} masih terkunci! Selesaikan Level ${lvlNum - 1} terlebih dahulu.`)
+      setTimeout(() => setBubbleText(null), 3500)
+      return
     }
-    // Advance to Step 2: Detail Level
+
+    sounds.playClick()
+    setActiveLevelData(getLevelData(lvlNum))
+    setCurrentLives(3) // Each level starts fresh with 3 lives
     changeStep('detail')
   }
 
@@ -115,26 +191,68 @@ export const PetaView: React.FC<PetaViewProps> = ({
   }
 
   // Step 3 -> Step 4: Finish Exploration and go to Quiz
-  const handleFinishExploration = (earnedCoins: number) => {
+  const handleFinishExploration = (earnedCoins: number, _shapes: number, remainingLives: number) => {
     setCoinsEarnedInExploration(earnedCoins)
+    setCurrentLives(remainingLives)
     changeStep('quiz')
   }
 
   // Step 4 -> Step 5: Finish Quiz and show Results
-  const handleFinishQuiz = (score: number, correctCount: number) => {
+  const handleFinishQuiz = (score: number, correctCount: number, remainingLives: number) => {
     setFinalScore(score)
     setQuizCorrectCount(correctCount)
+    setCurrentLives(remainingLives)
+
+    // Calculate star rating strictly based on remaining lives (1 to 3 stars)
+    const starsEarned = Math.max(1, Math.min(3, remainingLives))
+
+    // Update level progress (mark completed, save stars matching lives, unlock next level)
+    setLevelProgress((prev) => {
+      const currentLevelNum = activeLevelData.levelNumber
+      const updated = {
+        ...prev,
+        [currentLevelNum]: {
+          completed: true,
+          stars: starsEarned, // Matches remaining lives: 3 lives = 3 stars, 2 lives = 2 stars, 1 life = 1 star
+          unlocked: true,
+        },
+        ...(currentLevelNum < 15
+          ? {
+              [currentLevelNum + 1]: {
+                ...(prev[currentLevelNum + 1] || { completed: false, stars: 0 }),
+                unlocked: true,
+              },
+            }
+          : {}),
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+      } catch (e) {
+        console.error('Failed to save progress to localStorage:', e)
+      }
+      return updated
+    })
+
     // Award rewards to player's global wallet
-    onUpdateRewards(3, coinsEarnedInExploration || 460, 100)
+    onUpdateRewards(starsEarned, coinsEarnedInExploration || 460, 100)
     changeStep('result')
   }
 
   // Step 5 Actions: Continue or Replay
   const handleContinueFromResult = () => {
     changeStep('map')
+    const nextLvl = activeLevelData.levelNumber + 1
+    if (nextLvl <= 15) {
+      setBubbleText(`🎉 Luar biasa! Level ${activeLevelData.levelNumber} selesai! Level ${nextLvl} sekarang sudah terbuka!`)
+      setTimeout(() => setBubbleText(null), 4500)
+    } else {
+      setBubbleText('👑 Selamat! Kamu telah berhasil menaklukkan seluruh 15 level petualangan!')
+      setTimeout(() => setBubbleText(null), 5000)
+    }
   }
 
   const handleReplayLevel = () => {
+    setCurrentLives(3)
     changeStep('detail')
   }
 
@@ -182,6 +300,7 @@ export const PetaView: React.FC<PetaViewProps> = ({
       <LevelQuizView
         levelData={activeLevelData}
         explorationScore={100}
+        initialLives={currentLives}
         onFinishQuiz={handleFinishQuiz}
         onExit={() => changeStep('map')}
       />
@@ -196,6 +315,7 @@ export const PetaView: React.FC<PetaViewProps> = ({
         finalScore={finalScore}
         correctCount={quizCorrectCount}
         coinsEarned={coinsEarnedInExploration}
+        remainingLives={currentLives}
         onContinue={handleContinueFromResult}
         onReplay={handleReplayLevel}
       />
@@ -325,44 +445,14 @@ export const PetaView: React.FC<PetaViewProps> = ({
         title="Peta Petualangan"
       />
 
-      {/* 7. Daily Mission Card */}
+      {/* 7. Daily Mission Card Hotspot */}
       <button
         type="button"
         className="hotspot-map-mission-card"
         onClick={() => { sounds.playClick(); onOpenMissions(); }}
-        aria-label="Misi Hari Ini"
-        title="Lihat Detail Misi"
-      >
-        <div className="mission-icon-wrap">📋</div>
-        <div className="mission-text-wrap">
-          <span className="mission-title">{activeMission.title}</span>
-          <span className="mission-sub">{activeMission.description}</span>
-          <div className="mission-bar-track">
-            <div
-              className="mission-bar-fill"
-              style={{ width: `${Math.min(100, (activeMission.progress / activeMission.target) * 100)}%` }}
-            />
-          </div>
-        </div>
-        <div className="mission-status-wrap">
-          <span className="mission-chevron">›</span>
-          <span className="mission-count-badge">
-            {activeMission.progress}/{activeMission.target}
-          </span>
-        </div>
-      </button>
-
-      {/* --- QUICK START CHIP FOR COMPLETE FLOW --- */}
-      <button
-        type="button"
-        className="map-flow-quick-chip"
-        onClick={() => handleLevelClick(1)}
-        title="Mulai Alur Level 1: Detail ➔ Eksplorasi ➔ Soal ➔ Hasil"
-      >
-        <span className="chip-play-icon">▶</span>
-        <span className="chip-label">Mainkan Alur Lengkap Level 1</span>
-        <span className="chip-badge">Baru!</span>
-      </button>
+        aria-label={`Misi Hari Ini: ${activeMission.title} (${activeMission.progress}/${activeMission.target})`}
+        title={`Misi Hari Ini: ${activeMission.title}`}
+      />
 
       {/* --- ISLAND BANNERS INTERACTIVITY --- */}
       <button
@@ -396,17 +486,45 @@ export const PetaView: React.FC<PetaViewProps> = ({
         aria-label="Kastil Geometri - Gabungan bentuk dan luas"
       />
 
-      {/* --- LEVEL NODES (Starting the sequential flow!) --- */}
-      {/* Island 1: Pulau Bentuk */}
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-1 active-completed"
-        onClick={() => handleLevelClick(1)}
-        aria-label="Level 1 - Mulai Alur Petualangan"
-        title="Level 1: Gerbang Pulau Bentuk"
-      >
-        <span className="node-glow-ring" />
-      </button>
+      {/* --- LEVEL NODES: EXACTLY 3 LEVELS PER ISLAND (15 LEVELS TOTAL) --- */}
+      {mapIslandsLevels.map((item) => {
+        const p = levelProgress[item.lvl] || { completed: false, stars: 0, unlocked: false }
+        const isUnlocked = !!p.unlocked
+        const isCompleted = !!p.completed
+        const isShaking = shakingNodeId === item.lvl
+        const isCurrentActive = isUnlocked && !isCompleted
+
+        return (
+          <button
+            key={item.lvl}
+            type="button"
+            className={`map-island-node node-lvl-${item.lvl} ${isUnlocked ? 'node-unlocked' : 'node-locked'} ${isShaking ? 'shaking' : ''}`}
+            style={{ top: item.top, left: item.left }}
+            onClick={() => handleLevelClick(item.lvl)}
+            aria-label={`[${islandThemeNames[item.lvl]?.name || 'Pulau'}] Level ${item.lvl}: ${item.title} - ${isCompleted ? `${p.stars} Bintang` : isUnlocked ? 'Terbuka' : 'Terkunci'}`}
+            title={`[${islandThemeNames[item.lvl]?.name || 'Pulau'}] Level ${item.lvl}: ${item.title} ${!isUnlocked ? '(Terkunci - Selesaikan level sebelumnya)' : ''}`}
+          >
+            {/* Clean, non-stacking stars sitting naturally right on the node rim */}
+            {isCompleted && p.stars > 0 && (
+              <div className={`node-stars-row stars-count-${p.stars}`} aria-label={`${p.stars} bintang`}>
+                {Array.from({ length: p.stars }).map((_, idx) => (
+                  <span key={idx} className="node-floating-star">⭐</span>
+                ))}
+              </div>
+            )}
+
+            {/* Glowing ring animation on current ready level */}
+            {isCurrentActive && <span className="node-glow-ring" />}
+
+            {/* If locked, show sleek lock badge overlay */}
+            {!isUnlocked && (
+              <span className="locked-node-overlay" aria-hidden="true">
+                <span className="locked-padlock-icon">🔒</span>
+              </span>
+            )}
+          </button>
+        )
+      })}
 
       {/* Si Segitiga Character on Island 1 */}
       <div
@@ -420,176 +538,6 @@ export const PetaView: React.FC<PetaViewProps> = ({
         <span className="hero-map-tap-hint">👆</span>
       </div>
 
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-2 active-ready"
-        onClick={() => handleLevelClick(2)}
-        aria-label="Level 2 - Siap Dimainkan"
-        title="Level 2: Persegi & Persegi Panjang"
-      >
-        <span className="node-glow-ring" />
-      </button>
-
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-3 locked"
-        onClick={() => handleLevelClick(3)}
-        aria-label="Level 3 - Terkunci"
-        title="Level 3: Tebak Bentuk"
-      />
-
-      {/* Island 2: Hutan Segi Empat Nodes */}
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-7 locked"
-        onClick={() => handleLevelClick(7)}
-        aria-label="Level 7"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-8 locked"
-        onClick={() => handleLevelClick(8)}
-        aria-label="Level 8"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-9 locked"
-        onClick={() => handleLevelClick(9)}
-        aria-label="Level 9"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-10 locked"
-        onClick={() => handleLevelClick(8)}
-        aria-label="Level 8 / 10"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-12a locked"
-        onClick={() => handleLevelClick(12)}
-        aria-label="Level 12"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-12b locked"
-        onClick={() => handleLevelClick(12)}
-        aria-label="Level 12"
-      />
-
-      {/* Island 3: Pegunungan Segitiga Nodes */}
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-13 locked"
-        onClick={() => handleLevelClick(13)}
-        aria-label="Level 13"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-14 locked"
-        onClick={() => handleLevelClick(14)}
-        aria-label="Level 14"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-15 locked"
-        onClick={() => handleLevelClick(15)}
-        aria-label="Level 15"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-16 locked"
-        onClick={() => handleLevelClick(16)}
-        aria-label="Level 16"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-17 locked"
-        onClick={() => handleLevelClick(17)}
-        aria-label="Level 17"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-18 locked"
-        onClick={() => handleLevelClick(18)}
-        aria-label="Level 18"
-      />
-
-      {/* Island 4: Danau Lingkaran Nodes */}
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-19 locked"
-        onClick={() => handleLevelClick(19)}
-        aria-label="Level 19"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-20 locked"
-        onClick={() => handleLevelClick(20)}
-        aria-label="Level 20"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-21 locked"
-        onClick={() => handleLevelClick(21)}
-        aria-label="Level 21"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-22 locked"
-        onClick={() => handleLevelClick(22)}
-        aria-label="Level 22"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-23 locked"
-        onClick={() => handleLevelClick(23)}
-        aria-label="Level 23"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-24 locked"
-        onClick={() => handleLevelClick(24)}
-        aria-label="Level 24"
-      />
-
-      {/* Island 5: Kastil Geometri Nodes */}
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-25 locked"
-        onClick={() => handleLevelClick(25)}
-        aria-label="Level 25"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-26 locked"
-        onClick={() => handleLevelClick(26)}
-        aria-label="Level 26"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-27 locked"
-        onClick={() => handleLevelClick(27)}
-        aria-label="Level 27"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-28 locked"
-        onClick={() => handleLevelClick(28)}
-        aria-label="Level 28"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-29 locked"
-        onClick={() => handleLevelClick(29)}
-        aria-label="Level 29"
-      />
-      <button
-        type="button"
-        className="hotspot-level-node node-lvl-30 locked"
-        onClick={() => handleLevelClick(30)}
-        aria-label="Level 30"
-      />
-
       {/* Airship Easter Egg */}
       <div
         className="hotspot-zeppelin"
@@ -600,27 +548,18 @@ export const PetaView: React.FC<PetaViewProps> = ({
         title="Kapal Udara"
       />
 
-      {/* --- BOTTOM-LEFT: HADIAH DUNIA CARD (Screen 1 exact match!) --- */}
+      {/* --- BOTTOM-LEFT: KOLEKSI BENTUK (3/24) CARD --- */}
       <button
         type="button"
-        className="hotspot-world-reward-card"
+        className="hotspot-shape-chest-card"
         onClick={() => {
           sounds.playStarCoin()
           setShowShapeCollection(true)
         }}
-        aria-label="Hadiah Dunia: 1/6"
-        title="Buka Koleksi Hadiah Dunia"
+        aria-label="Koleksi Bentuk: 3 dari 24 bentuk terkumpul"
+        title="Buka Koleksi Bentuk (3/24)"
       >
-        <span className="reward-card-title">Hadiah Dunia</span>
-        <div className="reward-shapes-chips">
-          <span className="reward-chip chip-tri">▲</span>
-          <span className="reward-chip chip-sq">■</span>
-          <span className="reward-chip chip-circ">●</span>
-        </div>
-        <div className="reward-progress-track">
-          <div className="reward-progress-fill" style={{ width: '16.6%' }} />
-        </div>
-        <span className="reward-ratio-badge">1/6</span>
+        <span className="chest-tap-glow" aria-hidden="true" />
       </button>
 
       {/* --- LEVEL PREVIEW MODAL (if previewLevel is set) --- */}

@@ -50,19 +50,50 @@ export const LevelDetailView: React.FC<LevelDetailViewProps> = ({
         {/* Wooden Plaque Title */}
         <div className="level-title-container">
           <div className="wooden-plaque-title">
-            <h2>Level {levelData.levelNumber}</h2>
+            <h2>Level {levelData.levelNumber}: {levelData.levelTitle}</h2>
           </div>
-          <div className="blue-ribbon-sub">
-            <span>{levelData.levelTitle}</span>
-          </div>
+          {levelData.subCategory && (
+            <div className="blue-ribbon-sub">
+              <span>{levelData.subCategory}</span>
+            </div>
+          )}
         </div>
 
-        {/* Tujuan (Objective) Card */}
+        {/* Tujuan (Objective & Capaian Pembelajaran) Card */}
         <div className="objective-white-card">
-          <div className="objective-header-row">
-            <strong>Tujuan:</strong>
-          </div>
-          <p className="objective-text">{levelData.objective}</p>
+          {levelData.learningOutcome ? (
+            <div className="detail-learning-block">
+              <strong className="block-label-accent">🎯 Capaian Pembelajaran:</strong>
+              <p className="objective-text">{levelData.learningOutcome}</p>
+            </div>
+          ) : (
+            <div className="objective-header-row">
+              <strong>Tujuan:</strong>
+              <p className="objective-text">{levelData.objective}</p>
+            </div>
+          )}
+
+          {levelData.adventureMission && (
+            <div className="detail-mission-block">
+              <strong className="block-label-accent">🧭 Misi Petualangan:</strong>
+              <p className="mission-text">{levelData.adventureMission}</p>
+            </div>
+          )}
+
+          {/* Target Shapes Required */}
+          {levelData.targetShapes && levelData.targetShapes.length > 0 && (
+            <div className="detail-target-shapes-row">
+              <span className="target-shapes-lead">Target Bentuk:</span>
+              <div className="target-chips-container">
+                {levelData.targetShapes.map((shape) => (
+                  <span key={shape.name} className="target-chip-pill">
+                    <span className="target-chip-emoji">{shape.icon}</span>
+                    <span className="target-chip-name">{shape.name}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stars Preview */}
           <div className="detail-stars-row">
@@ -71,7 +102,7 @@ export const LevelDetailView: React.FC<LevelDetailViewProps> = ({
             <span className="detail-star filled">★</span>
           </div>
 
-          {/* Badges for Time & Challenges */}
+          {/* Badges for Time, Challenges & Lives */}
           <div className="detail-meta-pills">
             <div className="meta-pill">
               <span className="meta-icon">⏱️</span>
@@ -80,6 +111,10 @@ export const LevelDetailView: React.FC<LevelDetailViewProps> = ({
             <div className="meta-pill">
               <span className="meta-icon">🎯</span>
               <span>{levelData.challengesCount} tantangan</span>
+            </div>
+            <div className="meta-pill lives-pill">
+              <span className="meta-icon">❤️</span>
+              <span>{levelData.initialLives || 3} Nyawa</span>
             </div>
           </div>
         </div>

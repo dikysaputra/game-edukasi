@@ -5,13 +5,15 @@ import type { LevelDetailData } from '../../data/levelFlowData'
 interface LevelQuizViewProps {
   levelData: LevelDetailData
   explorationScore: number
-  onFinishQuiz: (finalScore: number, correctCount: number) => void
+  initialLives?: number
+  onFinishQuiz: (finalScore: number, correctCount: number, remainingLives: number) => void
   onExit: () => void
 }
 
 export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
   levelData,
   explorationScore,
+  initialLives,
   onFinishQuiz,
   onExit,
 }) => {
@@ -23,9 +25,24 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
   const [score, setScore] = useState(explorationScore)
   const [correctAnswersCount, setCorrectAnswersCount] = useState(0)
   const [tryCount, setTryCount] = useState(0)
+  const [lives, setLives] = useState(initialLives ?? levelData.initialLives ?? 3)
+  const [isGameOver, setIsGameOver] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
 
   const currentQ = levelData.questions[qIndex]
+
+  // Deduct life on wrong answer helper
+  const deductLife = () => {
+    sounds.playWrong()
+    setTryCount((t) => t + 1)
+    setLives((prev) => {
+      const nextLives = Math.max(0, prev - 1)
+      if (nextLives === 0) {
+        setIsGameOver(true)
+      }
+      return nextLives
+    })
+  }
 
   // Single-choice selection (Type: single-choice, numeric, object-identify)
   const handleSelectOption = (optId: string) => {
@@ -44,8 +61,7 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
       const points = 100 + (tryCount === 0 ? 50 : 0) // +100 correct, +50 no-hint first try
       setScore((s) => s + points)
     } else {
-      sounds.playWrong()
-      setTryCount((t) => t + 1)
+      deductLife()
     }
   }
 
@@ -74,8 +90,7 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
       const points = 100 + (tryCount === 0 ? 50 : 0)
       setScore((s) => s + points)
     } else {
-      sounds.playWrong()
-      setTryCount((t) => t + 1)
+      deductLife()
     }
   }
 
@@ -85,6 +100,21 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
     setHasSubmitted(false)
     setIsCorrect(null)
     setSelectedSingle(null)
+  }
+
+  // Retry quiz after Game Over
+  const handleRetryQuiz = () => {
+    sounds.playClick()
+    setLives(levelData.initialLives || 3)
+    setIsGameOver(false)
+    setQIndex(0)
+    setSelectedSingle(null)
+    setSelectedMulti([])
+    setHasSubmitted(false)
+    setIsCorrect(null)
+    setTryCount(0)
+    setScore(explorationScore)
+    setCorrectAnswersCount(0)
   }
 
   // Advance to next question or finish quiz
@@ -99,13 +129,13 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
       setTryCount(0)
     } else {
       sounds.playVictory()
-      onFinishQuiz(score, correctAnswersCount)
+      onFinishQuiz(score, correctAnswersCount, lives)
     }
   }
 
   return (
     <div className="level-flow-screen quiz-level-screen">
-      {/* Top Header Bar matching Screen 4 */}
+      {/* Top Header Bar matching Screen 4 with Lives */}
       <header className="flow-top-bar quiz-top-bar">
         <button
           type="button"
@@ -118,6 +148,18 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
         >
           <span>{isPaused ? '▶' : '⏸'}</span>
         </button>
+
+        {/* Lives (Hati / Nyawa) Bar: 3 Hearts */}
+        <div className="flow-header-lives-display quiz-lives-bar" title={`Sisa Nyawa: ${lives}/3`}>
+          {[1, 2, 3].map((heartIndex) => (
+            <span
+              key={heartIndex}
+              className={`heart-icon ${heartIndex <= lives ? 'heart-full' : 'heart-empty'}`}
+            >
+              {heartIndex <= lives ? '❤️' : '🤍'}
+            </span>
+          ))}
+        </div>
 
         {/* Question Counter Pill */}
         <div className="quiz-progress-pill">
@@ -341,6 +383,33 @@ export const LevelQuizView: React.FC<LevelQuizViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Game Over (Nyawa Habis) Overlay */}
+      {isGameOver && (
+        <div className="explore-gameover-overlay">
+          <div className="gameover-dialog-card">
+            <span className="gameover-broken-heart">💔</span>
+            <h3>Nyawa Habis!</h3>
+            <p>Nyawamu habis saat menjawab kuis. Coba pelajari lagi konsep bentuknya dan ulangi kuis!</p>
+            <div className="gameover-actions-column">
+              <button
+                type="button"
+                className="gameover-retry-btn"
+                onClick={handleRetryQuiz}
+              >
+                🔄 Ulangi Kuis (Isi 3 Nyawa)
+              </button>
+              <button
+                type="button"
+                className="gameover-exit-btn"
+                onClick={onExit}
+              >
+                ✕ Kembali ke Peta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pause Dialog Overlay */}
       {isPaused && (
