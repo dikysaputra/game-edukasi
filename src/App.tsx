@@ -80,7 +80,7 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem('game_level', playerLevel.toString())
-  }, [playerLevel])
+  }, [playerLevel]) 
 
   useEffect(() => {
     localStorage.setItem('game_coins', coins.toString())
